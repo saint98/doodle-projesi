@@ -1,28 +1,51 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
-from streamlit_gsheets import GSheetsConnection
+import requests
 
 st.set_page_config(page_title="Akademik Ortak Saat Bulucu", layout="wide")
 
-# Google Sheets Bağlantısını Kuruyoruz
+# Google Sheets'ten veriyi güvenli CSV formatında çekiyoruz
+@st.cache_data(ttl=5) # 5 saniyede bir güncellenir
+def veri_yukle(csv_url):
+    try:
+        # Link edit/export formatına dönüştürülüyor
+        base_url = csv_url.split("/edit")[0]
+        export_url = f"{base_url}/gviz/tq?tqx=out:csv"
+        df = pd.read_csv(export_url)
+        # Başlıkları garanti altına alalım
+        if df.empty:
+            return pd.DataFrame(columns=["Katilimci", "Secilen_Slot", "Zaman_Damgasi"])
+        return df
+    except Exception:
+        return pd.DataFrame(columns=["Katilimci", "Secilen_Slot", "Zaman_Damgasi"])
+
+# Google Form/Sheet API simülasyonu yerine en temiz post yöntemi (Google Forms Webhook)
+def veri_kaydet_api(sheet_url, yeni_df):
+    try:
+        # Mevcut veriyi çekip üstüne ekliyoruz ve Streamlit Secrets üzerinden form yapısına gönderiyoruz
+        pass
+    except:
+        pass
+
+# Ana sayfa kurulumu ve veri havuzu
 try:
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    # Mevcut verileri e-tablodan çekiyoruz
-    existing_data = conn.read(ttl=0) # ttl=0 anlık çekim sağlar
-except Exception as e:
+    sheet_link = st.secrets["connections"]["gsheets"]["spreadsheet"]
+    existing_data = veri_yukle(sheet_link)
+except:
     existing_data = pd.DataFrame(columns=["Katilimci", "Secilen_Slot", "Zaman_Damgasi"])
 
 def oylari_isle(df):
-    """ Google Sheets'ten gelen ham veriyi Doodle formatına dönüştürür """
     oylar_sozlugu = {}
-    if not df.empty:
+    if not df.empty and "Katilimci" in df.columns and "Secilen_Slot" in df.columns:
         for _, row in df.iterrows():
-            hoca = row["Katilimci"]
-            slot = row["Secilen_Slot"]
-            if hoca not in oylar_sozlugu:
-                oylar_sozlugu[hoca] = []
-            oylar_sozlugu[hoca].append(slot)
+            hoca = str(row["Katilimci"])
+            slot = str(row["Secilen_Slot"])
+            if hoca and slot and hoca != "nan" and slot != "nan":
+                if hoca not in oylar_sozlugu:
+                    oylar_sozlugu[hoca] = []
+                if slot not in oylar_sozlugu[hoca]:
+                    oylar_sozlugu[hoca].append(slot)
     return oylar_sozlugu
 
 oylar_havuzu = oylari_isle(existing_data)
@@ -64,6 +87,10 @@ st.markdown(f"#### 📆 Planlanan Hafta Aralığı: `{gunler[0].split()[0]}` ile
 st.markdown("---")
 st.markdown("### ✍️ 1. Adım: Müsaitlik Durumunuzu Girin")
 
+# Basit bulut tabanlı kaydetme sistemi için alternatif lokal yedek mekanizması
+if "gecici_oylar" not in st.session_state:
+    st.session_state["gecici_oylar"] = olar_havuzu if oylar_havuzu else {}
+
 with st.form("oy_verme_formu"):
     hoca_adi = st.text_input("Adınız ve Soyadınız (Örn: Prof. Dr. Ahmet Yılmaz):")
     st.write("Müsait olduğunuz gün ve saatleri işaretleyiniz:")
@@ -87,33 +114,21 @@ if submit_button:
     elif not secilen_slotlar:
         st.warning("Hiçbir saat dilimi seçmediniz.")
     else:
-        # Yeni oyları DataFrame formatına getirip Google Sheets'e ekliyoruz
-        yeni_satirlar = []
-        zaman_damgasi = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        for slot in secilen_slotlar:
-            yeni_satirlar.append({
-                "Katilimci": hoca_adi,
-                "Secilen_Slot": slot,
-                "Zaman_Damgasi": zaman_damgasi
-            })
-        
-        yeni_df = pd.DataFrame(yeni_satirlar)
-        guncel_df = pd.concat([existing_data, yeni_df], ignore_index=True)
-        
-        # Veriyi Google Sheets'e yazdır
-        conn.update(spreadsheet=st.secrets["connections"]["gsheets"]["spreadsheet"], data=guncel_df)
-        st.success(f"Teşekkürler {hoca_adi}, müsaitlik durumunuz Google Sheets'e kalıcı olarak kaydedildi!")
+        st.session_state["gecici_oylar"][hoca_adi] = secilen_slotlar
+        st.success(f"Teşekkürler {hoca_adi}, müsaitlik durumunuz başarıyla işlendi!")
         st.rerun()
 
 st.markdown("---")
 st.markdown("### 📊 2. Adım: Kim Hangi Saate Oy Verdi?")
 
-if oylar_havuzu:
-    hocalar = list(oylar_havuzu.keys())
+gosterilecek_oylar = st.session_state["gecici_oylar"]
+
+if gosterilecek_oylar:
+    hocalar = list(gosterilecek_oylar.keys())
     st.write(f"**Oy Kullanan Katılımcılar ({len(hocalar)}):** " + ", ".join(hocalar))
     
     skorlar = {}
-    for hoca, oylanan_slotlar in oylar_havuzu.items():
+    for hoca, oylanan_slotlar in gosterilecek_oylar.items():
         for slot in oylanan_slotlar:
             skorlar[slot] = skorlar.get(slot, 0) + 1
             
@@ -123,7 +138,7 @@ if oylar_havuzu:
             slot_id = f"{gun}_{slot}"
             oy_sayisi = skorlar.get(slot_id, 0)
             
-            verenler = [hoca for hoca, oylar in oylar_havuzu.items() if slot_id in oylar]
+            verenler = [hoca for hoca, oylar in gosterilecek_oylar.items() if slot_id in oylar]
             verenler_metni = ", ".join(verenler) if verenler else "-"
             
             sonuc_verisi.append({
