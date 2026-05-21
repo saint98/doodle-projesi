@@ -2,45 +2,46 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 import requests
+import json
 
 st.set_page_config(page_title="Akademik Ortak Saat Bulucu", layout="wide")
 
-# Google Sheets'ten veriyi güvenli CSV formatında çekiyoruz
-@st.cache_data(ttl=5) # 5 saniyede bir güncellenir
-def veri_yukle(csv_url):
+# Google Apps Script üzerinden kalıcı verileri çekiyoruz
+@st.cache_data(ttl=2)
+def verileri_getir():
     try:
-        # Link edit/export formatına dönüştürülüyor
-        base_url = csv_url.split("/edit")[0]
-        export_url = f"{base_url}/gviz/tq?tqx=out:csv"
-        df = pd.read_csv(export_url)
-        # Başlıkları garanti altına alalım
-        if df.empty:
-            return pd.DataFrame(columns=["Katilimci", "Secilen_Slot", "Zaman_Damgasi"])
-        return df
-    except Exception:
+        url = st.secrets["connections"]["macro_url"]
+        response = requests.get(url)
+        if response.status_code == 200:
+            veri_listesi = response.json()
+            if veri_listesi:
+                return pd.DataFrame(veri_listesi)
+        return pd.DataFrame(columns=["Katilimci", "Secilen_Slot", "Zaman_Damgasi"])
+    except:
         return pd.DataFrame(columns=["Katilimci", "Secilen_Slot", "Zaman_Damgasi"])
 
-# Google Form/Sheet API simülasyonu yerine en temiz post yöntemi (Google Forms Webhook)
-def veri_kaydet_api(sheet_url, yeni_df):
+# Google Sheets'e verileri anlık olarak gönderen fonksiyon
+def veriyi_gonder(yeni_satirlar):
     try:
-        # Mevcut veriyi çekip üstüne ekliyoruz ve Streamlit Secrets üzerinden form yapısına gönderiyoruz
-        pass
+        url = st.secrets["connections"]["macro_url"]
+        headers = {'Content-Type': 'application/json'}
+        response = requests.post(url, data=json.dumps(yeni_satirlar), headers=headers)
+        if response.status_code == 200:
+            return True
+        return False
     except:
-        pass
+        return False
 
-# Ana sayfa kurulumu ve veri havuzu
-try:
-    sheet_link = st.secrets["connections"]["gsheets"]["spreadsheet"]
-    existing_data = veri_yukle(sheet_link)
-except:
-    existing_data = pd.DataFrame(columns=["Katilimci", "Secilen_Slot", "Zaman_Damgasi"])
+existing_data = verileri_getir()
 
 def oylari_isle(df):
     oylar_sozlugu = {}
-    if not df.empty and "Katilimci" in df.columns and "Secilen_Slot" in df.columns:
+    if not df.empty:
+        # Sütun isimlerini küçük/büyük harf duyarlılığına karşı standartlaştıralım
+        df.columns = [c.strip() for c in df.columns]
         for _, row in df.iterrows():
-            hoca = str(row["Katilimci"])
-            slot = str(row["Secilen_Slot"])
+            hoca = str(row.get("Katilimci", ""))
+            slot = str(row.get("Secilen_Slot", ""))
             if hoca and slot and hoca != "nan" and slot != "nan":
                 if hoca not in oylar_sozlugu:
                     oylar_sozlugu[hoca] = []
@@ -87,10 +88,6 @@ st.markdown(f"#### 📆 Planlanan Hafta Aralığı: `{gunler[0].split()[0]}` ile
 st.markdown("---")
 st.markdown("### ✍️ 1. Adım: Müsaitlik Durumunuzu Girin")
 
-# Basit bulut tabanlı kaydetme sistemi için alternatif lokal yedek mekanizması
-if "gecici_oylar" not in st.session_state:
-    st.session_state["gecici_oylar"] = olar_havuzu if oylar_havuzu else {}
-
 with st.form("oy_verme_formu"):
     hoca_adi = st.text_input("Adınız ve Soyadınız (Örn: Prof. Dr. Ahmet Yılmaz):")
     st.write("Müsait olduğunuz gün ve saatleri işaretleyiniz:")
@@ -114,21 +111,33 @@ if submit_button:
     elif not secilen_slotlar:
         st.warning("Hiçbir saat dilimi seçmediniz.")
     else:
-        st.session_state["gecici_oylar"][hoca_adi] = secilen_slotlar
-        st.success(f"Teşekkürler {hoca_adi}, müsaitlik durumunuz başarıyla işlendi!")
-        st.rerun()
+        yeni_satirlar = []
+        zaman_damgasi = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        for slot in secilen_slotlar:
+            yeni_satirlar.append({
+                "Katilimci": hoca_adi,
+                "Secilen_Slot": slot,
+                "Zaman_Damgasi": zaman_damgasi
+            })
+        
+        with st.spinner("Veriler kalıcı olarak Google Sheets'e senkronize ediliyor..."):
+            basari = veriyi_gonder(yeni_satirlar)
+            if basari:
+                st.success(f"Teşekkürler {hoca_adi}, müsaitlik durumunuz Google Sheets'e başarıyla kaydedildi!")
+                st.cache_data.clear()
+                st.rerun()
+            else:
+                st.error("Bağlantı hatası oluştu veya Secrets / Makro linki geçersiz. Lütfen ayarları kontrol edin.")
 
 st.markdown("---")
 st.markdown("### 📊 2. Adım: Kim Hangi Saate Oy Verdi?")
 
-gosterilecek_oylar = st.session_state["gecici_oylar"]
-
-if gosterilecek_oylar:
-    hocalar = list(gosterilecek_oylar.keys())
+if oylar_havuzu:
+    hocalar = list(oylar_havuzu.keys())
     st.write(f"**Oy Kullanan Katılımcılar ({len(hocalar)}):** " + ", ".join(hocalar))
     
     skorlar = {}
-    for hoca, oylanan_slotlar in gosterilecek_oylar.items():
+    for hoca, oylanan_slotlar in oylar_havuzu.items():
         for slot in oylanan_slotlar:
             skorlar[slot] = skorlar.get(slot, 0) + 1
             
@@ -138,7 +147,7 @@ if gosterilecek_oylar:
             slot_id = f"{gun}_{slot}"
             oy_sayisi = skorlar.get(slot_id, 0)
             
-            verenler = [hoca for hoca, oylar in gosterilecek_oylar.items() if slot_id in oylar]
+            verenler = [hoca for hoca, oylar in oylar_havuzu.items() if slot_id in oylar]
             verenler_metni = ", ".join(verenler) if verenler else "-"
             
             sonuc_verisi.append({
@@ -150,7 +159,6 @@ if gosterilecek_oylar:
             
     df_sonuc = pd.DataFrame(sonuc_verisi)
     df_sonuc = df_sonuc.sort_values(by="Müsait Kişi Sayısı", ascending=False)
-    
     st.dataframe(df_sonuc, use_container_width=True, hide_index=True)
 else:
-    st.info("Henüz kimse oy kullanmadı. İlk oyu siz verebilirsiniz.")
+    st.info("Henüz kimse oy kullanmadı veya yüklenen veri bulunamadı. İlk oyu siz verebilirsiniz.")
