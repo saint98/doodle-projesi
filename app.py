@@ -1,29 +1,34 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
-import json
-import os
+from streamlit_gsheets import GSheetsConnection
 
 st.set_page_config(page_title="Akademik Ortak Saat Bulucu", layout="wide")
 
-DB_FILE = "doodle_data.json"
+# Google Sheets Bağlantısını Kuruyoruz
+try:
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    # Mevcut verileri e-tablodan çekiyoruz
+    existing_data = conn.read(ttl=0) # ttl=0 anlık çekim sağlar
+except Exception as e:
+    existing_data = pd.DataFrame(columns=["Katilimci", "Secilen_Slot", "Zaman_Damgasi"])
 
-def veri_yukle():
-    if os.path.exists(DB_FILE):
-        with open(DB_FILE, "r") as f:
-            return json.load(f)
-    return {"etkinlik_adi": "Jüri ve Kurul Ortak Saat Belirleme", "oylar": {}, "baslangic_tarihi": ""}
+def oylari_isle(df):
+    """ Google Sheets'ten gelen ham veriyi Doodle formatına dönüştürür """
+    oylar_sozlugu = {}
+    if not df.empty:
+        for _, row in df.iterrows():
+            hoca = row["Katilimci"]
+            slot = row["Secilen_Slot"]
+            if hoca not in oylar_sozlugu:
+                oylar_sozlugu[hoca] = []
+            oylar_sozlugu[hoca].append(slot)
+    return oylar_sozlugu
 
-def veri_kaydet(data):
-    with open(DB_FILE, "w") as f:
-        json.dump(data, f)
-
-db = veri_yukle()
+oylar_havuzu = oylari_isle(existing_data)
 
 def slot_uret(baslangic_tarih_obj, cozunurluk_dk=30):
     gun_isimleri = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma"]
-    
-    # Seçilen tarihin o haftaki Pazartesi gününe denk gelmesini garanti edelim
     hafta_basi = baslangic_tarih_obj - timedelta(days=baslangic_tarih_obj.weekday())
     
     gunler_tarihli = []
@@ -45,23 +50,15 @@ def slot_uret(baslangic_tarih_obj, cozunurluk_dk=30):
     return gunler_tarihli, tum_slotlar
 
 st.title("📅 Akademik Ortak Saat Bulucu (Doodle Mantığı)")
-st.subheader(f"Mevcut Etkinlik: {db['etkinlik_adi']}")
+st.subheader("Mevcut Etkinlik: Jüri ve Kurul Ortak Saat Belirleme")
 
 st.sidebar.markdown("### ⚙️ Ayarlar")
 cozunurluk = st.sidebar.radio("Zaman Çözünürlüğü Seçin (Dakika):", [30, 15], index=0)
 
-# Tarih seçici ekliyoruz
 varsayilan_tarih = datetime.now()
-secilen_tarih = st.sidebar.date_input("Hangi Haftayı Planlamak İstiyorsunuz? (O haftadan herhangi bir gün seçin):", varsayilan_tarih)
+secilen_tarih = st.sidebar.date_input("Hangi Haftayı Planlamak İstiyorsunuz?", varsayilan_tarih)
 
 gunler, slotlar = slot_uret(secilen_tarih, cozunurluk)
-
-# Eğer yönetici haftayı değiştirirse eski oyları temizleme opsiyonu uyarısı
-tarih_str = secilen_tarih.strftime('%Y-%m-%d')
-if "aktif_hafta" not in db or db["aktif_hafta"] != list(gunler)[0].split()[0]:
-    db["aktif_hafta"] = list(gunler)[0].split()[0]
-    db["oylar"] = {} # Yeni hafta seçildiğinde oyları temizle
-    veri_kaydet(db)
 
 st.markdown(f"#### 📆 Planlanan Hafta Aralığı: `{gunler[0].split()[0]}` ile `{gunler[-1].split()[0]}` Arası")
 st.markdown("---")
@@ -90,20 +87,33 @@ if submit_button:
     elif not secilen_slotlar:
         st.warning("Hiçbir saat dilimi seçmediniz.")
     else:
-        db["oylar"][hoca_adi] = secilen_slotlar
-        veri_kaydet(db)
-        st.success(f"Teşekkürler {hoca_adi}, müsaitlik durumunuz başarıyla kaydedildi!")
+        # Yeni oyları DataFrame formatına getirip Google Sheets'e ekliyoruz
+        yeni_satirlar = []
+        zaman_damgasi = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        for slot in secilen_slotlar:
+            yeni_satirlar.append({
+                "Katilimci": hoca_adi,
+                "Secilen_Slot": slot,
+                "Zaman_Damgasi": zaman_damgasi
+            })
+        
+        yeni_df = pd.DataFrame(yeni_satirlar)
+        guncel_df = pd.concat([existing_data, yeni_df], ignore_index=True)
+        
+        # Veriyi Google Sheets'e yazdır
+        conn.update(spreadsheet=st.secrets["connections"]["gsheets"]["spreadsheet"], data=guncel_df)
+        st.success(f"Teşekkürler {hoca_adi}, müsaitlik durumunuz Google Sheets'e kalıcı olarak kaydedildi!")
         st.rerun()
 
 st.markdown("---")
 st.markdown("### 📊 2. Adım: Kim Hangi Saate Oy Verdi?")
 
-if db["oylar"]:
-    hocalar = list(db["oylar"].keys())
+if oylar_havuzu:
+    hocalar = list(oylar_havuzu.keys())
     st.write(f"**Oy Kullanan Katılımcılar ({len(hocalar)}):** " + ", ".join(hocalar))
     
     skorlar = {}
-    for hoca, oylanan_slotlar in db["oylar"].items():
+    for hoca, oylanan_slotlar in oylar_havuzu.items():
         for slot in oylanan_slotlar:
             skorlar[slot] = skorlar.get(slot, 0) + 1
             
@@ -113,7 +123,7 @@ if db["oylar"]:
             slot_id = f"{gun}_{slot}"
             oy_sayisi = skorlar.get(slot_id, 0)
             
-            verenler = [hoca for hoca, oylar in db["oylar"].items() if slot_id in oylar]
+            verenler = [hoca for hoca, oylar in oylar_havuzu.items() if slot_id in oylar]
             verenler_metni = ", ".join(verenler) if verenler else "-"
             
             sonuc_verisi.append({
@@ -127,29 +137,5 @@ if db["oylar"]:
     df_sonuc = df_sonuc.sort_values(by="Müsait Kişi Sayısı", ascending=False)
     
     st.dataframe(df_sonuc, use_container_width=True, hide_index=True)
-    
-    st.markdown("---")
-    st.markdown("### 🗓️ 3. Adım: Ortak Saati Kararlaştır ve Google Takvim'e Ekle")
-    
-    en_yuksek_oy = df_sonuc["Müsait Kişi Sayısı"].max()
-    en_uygun_slotlar = df_sonuc[df_sonuc["Müsait Kişi Sayısı"] == en_yuksek_oy]
-    
-    secenekler_listesi = []
-    for idx, row in en_uygun_slotlar.iterrows():
-        secenekler_listesi.append(f"{row['Gün / Tarih']} | {row['Saat Aralığı']} ({row['Müsait Kişi Sayısı']} Kişi Müsait)")
-        
-    secilen_final_saat = st.selectbox("Kesinleşen Toplantı Saatini Seçin:", secenekler_listesi)
-    
-    katilimci_mailleri = st.text_input("Hocaların E-posta adreslerini virgülle ayırarak girin (Takvim daveti için):", 
-                                       "hoca1@universite.edu.tr, hoca2@universite.edu.tr")
-    
-    if st.button("Google Takvim Etkinliği Oluştur"):
-        st.info("Google Calendar API entegrasyonu tetiklendi!")
-        st.success(f"✓ '{db['etkinlik_adi']}' için {secilen_final_saat} zamanına takvim daveti gönderildi!")
-        
 else:
-    st.info("Henüz kimse oy kullanmadı. Yukarıdaki formdan ilk oyu siz verebilirsiniz.")
-
-if st.sidebar.button("Tüm Oyları Sıfırla"):
-    veri_kaydet({"etkinlik_adi": db["etkinlik_adi"], "oylar": {}, "aktif_hafta": db["aktif_hafta"]})
-    st.rerun()
+    st.info("Henüz kimse oy kullanmadı. İlk oyu siz verebilirsiniz.")
