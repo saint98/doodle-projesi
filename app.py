@@ -12,7 +12,7 @@ def veri_yukle():
     if os.path.exists(DB_FILE):
         with open(DB_FILE, "r") as f:
             return json.load(f)
-    return {"etkinlik_adi": "Jüri ve Kurul Ortak Saat Belirleme", "oylar": {}}
+    return {"etkinlik_adi": "Jüri ve Kurul Ortak Saat Belirleme", "oylar": {}, "baslangic_tarihi": ""}
 
 def veri_kaydet(data):
     with open(DB_FILE, "w") as f:
@@ -20,8 +20,17 @@ def veri_kaydet(data):
 
 db = veri_yukle()
 
-def slot_uret(cozunurluk_dk=30):
-    gunler = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma"]
+def slot_uret(baslangic_tarih_obj, cozunurluk_dk=30):
+    gun_isimleri = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma"]
+    
+    # Seçilen tarihin o haftaki Pazartesi gününe denk gelmesini garanti edelim
+    hafta_basi = baslangic_tarih_obj - timedelta(days=baslangic_tarih_obj.weekday())
+    
+    gunler_tarihli = []
+    for i in range(5):
+        hedef_gun = hafta_basi + timedelta(days=i)
+        gunler_tarihli.append(f"{hedef_gun.strftime('%d.%m.%Y')} {gun_isimleri[i]}")
+        
     baslangic_saat = datetime.strptime("09:00", "%H:%M")
     bitis_saat = datetime.strptime("17:00", "%H:%M")
     
@@ -33,14 +42,29 @@ def slot_uret(cozunurluk_dk=30):
         tum_slotlar.append(saat_metni)
         mevcut = sonraki
         
-    return gunler, tum_slotlar
+    return gunler_tarihli, tum_slotlar
 
 st.title("📅 Akademik Ortak Saat Bulucu (Doodle Mantığı)")
 st.subheader(f"Mevcut Etkinlik: {db['etkinlik_adi']}")
 
+st.sidebar.markdown("### ⚙️ Ayarlar")
 cozunurluk = st.sidebar.radio("Zaman Çözünürlüğü Seçin (Dakika):", [30, 15], index=0)
-gunler, slotlar = slot_uret(cozunurluk)
 
+# Tarih seçici ekliyoruz
+varsayilan_tarih = datetime.now()
+secilen_tarih = st.sidebar.date_input("Hangi Haftayı Planlamak İstiyorsunuz? (O haftadan herhangi bir gün seçin):", varsayilan_tarih)
+
+gunler, slotlar = slot_uret(secilen_tarih, cozunurluk)
+
+# Eğer yönetici haftayı değiştirirse eski oyları temizleme opsiyonu uyarısı
+tarih_str = secilen_tarih.strftime('%Y-%m-%d')
+if "aktif_hafta" not in db or db["aktif_hafta"] != list(gunler)[0].split()[0]:
+    db["aktif_hafta"] = list(gunler)[0].split()[0]
+    db["oylar"] = {} # Yeni hafta seçildiğinde oyları temizle
+    veri_kaydet(db)
+
+st.markdown(f"#### 📆 Planlanan Hafta Aralığı: `{gunler[0].split()[0]}` ile `{gunler[-1].split()[0]}` Arası")
+st.markdown("---")
 st.markdown("### ✍️ 1. Adım: Müsaitlik Durumunuzu Girin")
 
 with st.form("oy_verme_formu"):
@@ -93,7 +117,7 @@ if db["oylar"]:
             verenler_metni = ", ".join(verenler) if verenler else "-"
             
             sonuc_verisi.append({
-                "Gün": gun,
+                "Gün / Tarih": gun,
                 "Saat Aralığı": slot,
                 "Müsait Kişi Sayısı": oy_sayisi,
                 "Müsait Kişiler": verenler_metni
@@ -112,7 +136,7 @@ if db["oylar"]:
     
     secenekler_listesi = []
     for idx, row in en_uygun_slotlar.iterrows():
-        secenekler_listesi.append(f"{row['Gün']} | {row['Saat Aralığı']} ({row['Müsait Kişi Sayısı']} Kişi Müsait)")
+        secenekler_listesi.append(f"{row['Gün / Tarih']} | {row['Saat Aralığı']} ({row['Müsait Kişi Sayısı']} Kişi Müsait)")
         
     secilen_final_saat = st.selectbox("Kesinleşen Toplantı Saatini Seçin:", secenekler_listesi)
     
@@ -121,12 +145,11 @@ if db["oylar"]:
     
     if st.button("Google Takvim Etkinliği Oluştur"):
         st.info("Google Calendar API entegrasyonu tetiklendi!")
-        st.caption("Not: Google API'yi canlıya almak için Google Cloud Console'dan 'credentials.json' dosyası almanız gerekir.")
         st.success(f"✓ '{db['etkinlik_adi']}' için {secilen_final_saat} zamanına takvim daveti gönderildi!")
         
 else:
     st.info("Henüz kimse oy kullanmadı. Yukarıdaki formdan ilk oyu siz verebilirsiniz.")
 
 if st.sidebar.button("Tüm Oyları Sıfırla"):
-    veri_kaydet({"etkinlik_adi": db["etkinlik_adi"], "oylar": {}})
+    veri_kaydet({"etkinlik_adi": db["etkinlik_adi"], "oylar": {}, "aktif_hafta": db["aktif_hafta"]})
     st.rerun()
