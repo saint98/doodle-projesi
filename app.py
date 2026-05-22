@@ -6,7 +6,7 @@ import json
 import urllib.parse
 
 # Sayfa Yapısı ve Başlık Ayarı
-st.set_page_config(page_title="Create a poll - Doodle", layout="centered")
+st.set_page_config(page_title="Slotify - Find the Perfect Meeting Time", layout="centered")
 
 # Google Apps Script Bağlantısı
 @st.cache_data(ttl=1)
@@ -57,31 +57,31 @@ secilen_anket = parametreler.get("anket_id", None)
 
 if secilen_anket is None:
     # -------------------------------------------------------------------------
-    # 🧡 EKRAN 1: ANKET OLUŞTURMA SAYFASI (CREATE GROUP POLL)
+    # 🔮 EKRAN 1: ANKET OLUŞTURMA SAYFASI (CREATE POLL)
     # -------------------------------------------------------------------------
-    st.title("🧡 doodle")
-    st.subheader("Create group poll")
+    st.title("🔮 Slotify")
+    st.subheader("Create a group meeting poll")
     
     # BLOK 1: Detaylar
     with st.container(border=True):
         st.markdown("### 📝 Poll Details")
-        org_adi = st.text_input("Title", placeholder="What's the occasion? (e.g. Doçentlik Jürisi)")
-        aciklama = st.text_area("Description (optional)", placeholder="Here you can include things like an agenda or instructions.")
-        lokasyon = st.text_input("Location (optional)", placeholder="Where will this happen?")
+        org_adi = st.text_input("Title", placeholder="What's the occasion? (e.g. Project Sync, Team Dinner, Jury)")
+        aciklama = st.text_area("Description (optional)", placeholder="Add context, instructions, or an agenda for your participants.")
+        lokasyon = st.text_input("Location (optional)", placeholder="Where will this happen? (e.g. Meeting Room 3, Cafe, Online)")
         video_konferans = st.selectbox("Video conferencing", ["Off", "Google Meet", "Zoom", "Microsoft Teams"])
 
     # BLOK 2: Zaman Seçimi
     with st.container(border=True):
-        st.markdown("### 📅 Add your times")
-        st.info("⏱️ Duration: Fixed 30 min (Akademik Standart)")
-        planlanacak_hafta = st.date_input("Select Week (Planlanacak haftadan herhangi bir gün seçin)", datetime.now())
+        st.markdown("### 📅 Choose the target week")
+        st.info("⏱️ Duration: 30 min per time slot")
+        planlanacak_hafta = st.date_input("Select Week (Pick any day of the target week)", datetime.now())
 
     # BLOK 3: Özelleştirmeler
     with st.container(border=True):
-        st.markdown("### ⚙️ Customize your poll")
-        st.checkbox("Add your logo and brand colors", value=False, disabled=True, help="Pro feature")
-        st.checkbox("Remove Ads (Reklamlar Kaldırıldı)", value=True, disabled=True)
-        st.checkbox("Send automatic reminders", value=True, disabled=True)
+        st.markdown("### ⚙️ Premium Features")
+        st.checkbox("Add custom branding and logo", value=False, disabled=True, help="Upgrade to Slotify Pro")
+        st.checkbox("Remove Ads (100% Ad-Free Experience)", value=True, disabled=True)
+        st.checkbox("Send automatic reminders to missing participants", value=True, disabled=True)
 
     st.write("") 
     
@@ -95,15 +95,15 @@ if secilen_anket is None:
             ana_url = "https://doodle-projesi-ekrapj7pb5hsifyvauhpmv.streamlit.app"
             ozel_doodle_linki = f"{ana_url}/?anket_id={anket_kod}"
             
-            st.success("🎉 Poll created successfully!")
-            st.markdown("#### 🔗 Share this link with your participants:")
+            st.success("🎉 Meeting poll successfully created on Slotify!")
+            st.markdown("#### 🔗 Share this invite link with your group:")
             st.code(ozel_doodle_linki, language="text")
         else:
-            st.error("Please enter a Title for your poll!")
+            st.error("Please enter a Title for your meeting poll!")
 
 else:
     # -------------------------------------------------------------------------
-    # 👨‍🏫 EKRAN 2: HOCALARIN GÖRDÜĞÜ ANKET KATILIM MATRİSİ
+    # 👥 EKRAN 2: KATILIMCILARIN GÖRDÜĞÜ SEÇİM MATRİSİ
     # -------------------------------------------------------------------------
     gorunur_ad = urllib.parse.unquote(secilen_anket)
     try:
@@ -120,8 +120,8 @@ else:
     hafta_basi = tarih_obj - timedelta(days=tarih_obj.weekday())
     hafta_sonu = hafta_basi + timedelta(days=4)
     
-    # Net Tarih Bilgilendirme Kutusu
-    st.info(f"📅 **Planlanan Hafta Aralığı:** {hafta_basi.strftime('%d.%m.%Y')} ile {hafta_sonu.strftime('%d.%m.%Y')} Arası")
+    # Net Tarih ve Hafta Bilgilendirme Kutusu
+    st.info(f"📆 **Poll Target Week:** {hafta_basi.strftime('%d.%m.%Y')} to {hafta_sonu.strftime('%d.%m.%Y')}")
     
     org_data = raw_data[raw_data["Organizasyon_ID"] == secilen_anket] if not raw_data.empty else pd.DataFrame()
     
@@ -138,7 +138,7 @@ else:
     
     with st.form("hoca_formu", clear_on_submit=True):
         st.markdown("### ✍️ Choose your availability")
-        hoca_adi = st.text_input("Your Name / Soyadınız", placeholder="e.g. Prof. Dr. Ahmet Yılmaz")
+        hoca_adi = st.text_input("Your Name / Adınız Soyadınız", placeholder="e.g. John Doe / Ahmet Yılmaz")
         st.markdown("---")
         
         secilen_slotlar = []
@@ -146,11 +146,10 @@ else:
         
         for i, gun in enumerate(gunler):
             with cols[i]:
-                # gun formatı: "18.05.2026 Pazartesi"
                 tarih_kismi = gun.split(" ")[0]
                 gun_adi = gun.split(" ")[1].upper()
                 
-                # Sütun başlığında hem gün adı hem de net gg.aa.yyyy tarihi görünüyor
+                # Sütun başlıklarında net gün.ay.yıl ve Gün Adı
                 st.markdown(f"**{gun_adi}**\n`{tarih_kismi}`")
                 
                 for slot in slotlar:
@@ -160,7 +159,7 @@ else:
                         secilen_slotlar.append(slot_id)
                         
         st.write("") 
-        submit = st.form_submit_button("Submit your vote", type="primary", use_container_width=True)
+        submit = st.form_submit_button("Submit your availability", type="primary", use_container_width=True)
         
     if submit:
         if not hoca_adi:
@@ -179,17 +178,17 @@ else:
                 })
                 
             if veriyi_gonder(yeni_satirlar):
-                st.success("Vote submitted successfully!")
+                st.success("Availability successfully submitted!")
                 st.cache_data.clear()
                 st.rerun()
                     
     # SONUÇLAR (SKOR TABLOSU)
     st.write("") 
-    st.markdown("### 📊 Final Results (Most suitable slots on top)")
+    st.markdown("### 📊 Live Results (Most suitable slots on top)")
     
     if oylar_havuzu:
         hocalar = list(oylar_havuzu.keys())
-        st.write(f"**Oylamaya Katılan Hocalar ({len(hocalar)}):** " + ", ".join(hocalar))
+        st.write(f"**Who responded ({len(hocalar)}):** " + ", ".join(hocalar))
         
         skorlar = {}
         for hoca, oylanan_slotlar in oylar_havuzu.items():
@@ -215,7 +214,7 @@ else:
         df_sonuc = df_sonuc.sort_values(by="Votes", ascending=False)
         st.dataframe(df_sonuc, use_container_width=True, hide_index=True)
     else:
-        st.info("No votes yet. Be the first to vote!")
+        st.info("No responses yet. Be the first to share your availability!")
         
     if st.button("⬅️ Create a new poll"):
         st.query_params.clear()
