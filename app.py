@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import requests
 import json
 import urllib.parse
+import re
 
 # Sayfa Yapısı ve Başlık Ayarı
 st.set_page_config(page_title="Slotify - Find the Perfect Meeting Time", layout="centered")
@@ -28,6 +29,17 @@ def veriyi_gonder(yeni_satirlar):
         return response.status_code == 200
     except:
         return False
+
+# URL Dostu Metin Dönüştürücü (Türkçe Karakter Arındırma)
+def url_dostu_yap(metin):
+    turkce_karakterler = {'ç': 'c', 'ğ': 'g', 'ı': 'i', 'i': 'i', 'ö': 'o', 'ş': 's', 'ü': 'u',
+                          'Ç': 'c', 'Ğ': 'g', 'İ': 'i', 'Ö': 'o', 'Ş': 's', 'Ü': 'u'}
+    for kaynak, hedef in turkce_karakterler.items():
+        metin = metin.replace(kaynak, hedef)
+    metin = metin.lower().strip()
+    metin = re.sub(r'[^a-z0-9\s-]', '', metin)
+    metin = re.sub(r'[\s-]+', '-', metin)
+    return metin
 
 raw_data = verileri_getir()
 if not raw_data.empty:
@@ -85,12 +97,12 @@ if secilen_anket is None:
 
     st.write("") 
     
-    # Oluşturma Butonu
+    # Anket Oluşturma Butonu
     if st.button("Create poll and generate link", type="primary", use_container_width=True):
         if org_adi:
-            temiz_id = urllib.parse.quote(org_adi.strip())
+            temiz_slug = url_dostu_yap(org_adi)
             tarih_str = planlanacak_hafta.strftime("%d.%m.%Y")
-            anket_kod = f"{temiz_id}_{tarih_str}"
+            anket_kod = f"{temiz_slug}_{tarih_str}"
             
             ana_url = "https://doodle-projesi-ekrapj7pb5hsifyvauhpmv.streamlit.app"
             ozel_doodle_linki = f"{ana_url}/?anket_id={anket_kod}"
@@ -112,7 +124,8 @@ else:
     except:
         tarih_obj = datetime.now()
         
-    temiz_baslik = gorunur_ad.replace(f"_{tarih_obj.strftime('%d.%m.%Y')}", "")
+    # Başlığı okurken tireleri temizleyip daha şık bir görünüm sunuyoruz
+    temiz_baslik = gorunur_ad.replace(f"_{tarih_obj.strftime('%d.%m.%Y')}", "").replace("-", " ").title()
     
     st.title(f"📅 {temiz_baslik}")
     
@@ -120,8 +133,7 @@ else:
     hafta_basi = tarih_obj - timedelta(days=tarih_obj.weekday())
     hafta_sonu = hafta_basi + timedelta(days=4)
     
-    # Net Tarih ve Hafta Bilgilendirme Kutusu
-    st.info(f"📆 **Poll Target Week:** {hafta_basi.strftime('%d.%m.%Y')} to {hafta_sonu.strftime('%d.%m.%Y')}")
+    st.info(f"雪 **Poll Target Week:** {hafta_basi.strftime('%d.%m.%Y')} to {hafta_sonu.strftime('%d.%m.%Y')}")
     
     org_data = raw_data[raw_data["Organizasyon_ID"] == secilen_anket] if not raw_data.empty else pd.DataFrame()
     
@@ -149,7 +161,6 @@ else:
                 tarih_kismi = gun.split(" ")[0]
                 gun_adi = gun.split(" ")[1].upper()
                 
-                # Sütun başlıklarında net gün.ay.yıl ve Gün Adı
                 st.markdown(f"**{gun_adi}**\n`{tarih_kismi}`")
                 
                 for slot in slotlar:
