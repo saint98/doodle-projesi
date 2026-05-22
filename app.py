@@ -207,5 +207,4 @@ else:
                 })
                 
         df_sonuc = pd.DataFrame(sonuc_verisi)
-        df_sonuc = df_sonuc.sort_values(by="Votes", ascending=False)
-        st.dataframe(df_sonuc
+        df_sonuc = df_sonuc.sort_values
