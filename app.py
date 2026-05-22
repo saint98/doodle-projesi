@@ -8,37 +8,8 @@ import urllib.parse
 # Sayfa Yapısı ve Genişlik Ayarları (Doodle Tasarımı İçin Ortalanmış)
 st.set_page_config(page_title="Create a poll - Doodle", layout="centered", initial_sidebar_state="collapsed")
 
-# Doodle Kurumsal CSS Giydirmesi (Birebir Beyaz Kart Tasarımı)
-st.markdown("""
-    <style>
-    .main { background-color: #f8f9fa; }
-    .doodle-card {
-        background-color: white;
-        padding: 30px;
-        border-radius: 8px;
-        border: 1px solid #e3e6e8;
-        margin-bottom: 20px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    }
-    .doodle-section-title {
-        font-size: 22px;
-        font-weight: 600;
-        color: #1a1a1a;
-        margin-bottom: 15px;
-    }
-    div.stButton > button:first-child {
-        background-color: #0066cc;
-        color: white;
-        border-radius: 4px;
-        font-weight: bold;
-        border: none;
-        padding: 0.6rem 2rem;
-    }
-    div.stButton > button:first-child:hover {
-        background-color: #0052a3;
-    }
-    </style>
-""", unsafe_allowed_html=True)
+# Doodle Tasarımı İçin CSS Temizliği (Hatasız Tek Satır Formatında)
+st.markdown("<style>.main { background-color: #f8f9fa; } .doodle-card { background-color: white; padding: 30px; border-radius: 8px; border: 1px solid #e3e6e8; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); } .doodle-section-title { font-size: 22px; font-weight: 600; color: #1a1a1a; margin-bottom: 15px; } div.stButton > button:first-child { background-color: #0066cc; color: white; border-radius: 4px; font-weight: bold; border: none; padding: 0.6rem 2rem; } div.stButton > button:first-child:hover { background-color: #0052a3; }</style>", unsafe_allowed_html=True)
 
 # Google Apps Script Bağlantısı
 @st.cache_data(ttl=1)
@@ -146,10 +117,7 @@ else:
         
     temiz_baslik = gorunur_ad.replace(f"_{tarih_obj.strftime('%d.%m.%Y')}", "")
     
-    st.markdown(f'<div class="doodle-card" style="border-left: 5px solid #0066cc;">'
-                f'<h2>📅 {temiz_baslik}</h2>'
-                f'<p style="color:#65696b;">Haftalık Seçim Matrisi / Başlangıç: {tarih_obj.strftime("%d.%m.%Y")}</p>'
-                f'</div>', unsafe_allowed_html=True)
+    st.markdown(f'<div class="doodle-card" style="border-left: 5px solid #0066cc;"><h2>📅 {temiz_baslik}</h2><p style="color:#65696b;">Haftalık Seçim Matrisi / Başlangıç: {tarih_obj.strftime("%d.%m.%Y")}</p></div>', unsafe_allowed_html=True)
     
     org_data = raw_data[raw_data["Organizasyon_ID"] == secilen_anket] if not raw_data.empty else pd.DataFrame()
     
@@ -240,11 +208,4 @@ else:
                 
         df_sonuc = pd.DataFrame(sonuc_verisi)
         df_sonuc = df_sonuc.sort_values(by="Votes", ascending=False)
-        st.dataframe(df_sonuc, use_container_width=True, hide_index=True)
-    else:
-        st.info("No votes yet. Be the first to vote!")
-    st.markdown('</div>', unsafe_allowed_html=True)
-        
-    if st.button("⬅️ Create a new poll"):
-        st.query_params.clear()
-        st.rerun()
+        st.dataframe(df_sonuc
