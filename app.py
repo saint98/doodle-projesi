@@ -107,11 +107,21 @@ if secilen_anket is None:
             ana_url = "https://doodle-projesi-ekrapj7pb5hsifyvauhpmv.streamlit.app"
             ozel_doodle_linki = f"{ana_url}/?anket_id={anket_kod}"
             
-            st.success("🎉 Meeting poll successfully created on Slotify!")
-            st.markdown("#### 🔗 Share this invite link with your group:")
-            st.code(ozel_doodle_linki, language="text")
+            # Linki session state'e kaydediyoruz ki ekranda kalıcı olsun
+            st.session_state["uretilen_link"] = ozel_doodle_linki
         else:
             st.error("Please enter a Title for your meeting poll!")
+
+    # Eğer uretilen_link varsa ekranda göster ve kopyalama butonu sun
+    if "uretilen_link" in st.session_state:
+        st.success("🎉 Meeting poll successfully created on Slotify!")
+        st.markdown("#### 🔗 Share this invite link with your group:")
+        
+        # Seçme hatasını önleyen temiz gösterim kutusu
+        st.code(st.session_state["uretilen_link"], language="text")
+        
+        # Tarayıcı uyarısını tetiklemeyen modern kopyalama aracı
+        st.link_button("🔗 Click to Open / Copy Link", st.session_state["uretilen_link"], use_container_width=True)
 
 else:
     # -------------------------------------------------------------------------
@@ -124,16 +134,14 @@ else:
     except:
         tarih_obj = datetime.now()
         
-    # Başlığı okurken tireleri temizleyip daha şık bir görünüm sunuyoruz
     temiz_baslik = gorunur_ad.replace(f"_{tarih_obj.strftime('%d.%m.%Y')}", "").replace("-", " ").title()
     
     st.title(f"📅 {temiz_baslik}")
     
-    # Dinamik Hafta Aralığı Hesaplama (Pazartesi - Cuma)
     hafta_basi = tarih_obj - timedelta(days=tarih_obj.weekday())
     hafta_sonu = hafta_basi + timedelta(days=4)
     
-    st.info(f"雪 **Poll Target Week:** {hafta_basi.strftime('%d.%m.%Y')} to {hafta_sonu.strftime('%d.%m.%Y')}")
+    st.info(f"📅 **Poll Target Week:** {hafta_basi.strftime('%d.%m.%Y')} to {hafta_sonu.strftime('%d.%m.%Y')}")
     
     org_data = raw_data[raw_data["Organizasyon_ID"] == secilen_anket] if not raw_data.empty else pd.DataFrame()
     
@@ -193,7 +201,7 @@ else:
                 st.cache_data.clear()
                 st.rerun()
                     
-    # SONUÇLAR (SKOR TABLOSU)
+    # SONUÇLAR
     st.write("") 
     st.markdown("### 📊 Live Results (Most suitable slots on top)")
     
@@ -229,4 +237,6 @@ else:
         
     if st.button("⬅️ Create a new poll"):
         st.query_params.clear()
+        if "uretilen_link" in st.session_state:
+            del st.session_state["uretilen_link"]
         st.rerun()
