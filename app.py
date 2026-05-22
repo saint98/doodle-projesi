@@ -83,7 +83,7 @@ if secilen_anket is None:
         st.checkbox("Remove Ads (Reklamlar Kaldırıldı)", value=True, disabled=True)
         st.checkbox("Send automatic reminders", value=True, disabled=True)
 
-    st.write("") # Güvenli Boşluk
+    st.write("") 
     
     # Oluşturma Butonu
     if st.button("Create poll and generate link", type="primary", use_container_width=True):
@@ -115,7 +115,13 @@ else:
     temiz_baslik = gorunur_ad.replace(f"_{tarih_obj.strftime('%d.%m.%Y')}", "")
     
     st.title(f"📅 {temiz_baslik}")
-    st.caption(f"Haftalık Seçim Matrisi | Başlangıç: {tarih_obj.strftime('%d.%m.%Y')}")
+    
+    # Dinamik Hafta Aralığı Hesaplama (Pazartesi - Cuma)
+    hafta_basi = tarih_obj - timedelta(days=tarih_obj.weekday())
+    hafta_sonu = hafta_basi + timedelta(days=4)
+    
+    # Net Tarih Bilgilendirme Kutusu
+    st.info(f"📅 **Planlanan Hafta Aralığı:** {hafta_basi.strftime('%d.%m.%Y')} ile {hafta_sonu.strftime('%d.%m.%Y')} Arası")
     
     org_data = raw_data[raw_data["Organizasyon_ID"] == secilen_anket] if not raw_data.empty else pd.DataFrame()
     
@@ -140,9 +146,12 @@ else:
         
         for i, gun in enumerate(gunler):
             with cols[i]:
-                gun_tarih = gun.split(" ")[0].split(".")[0]
-                gun_adi = gun.split(" ")[1][:3].upper()
-                st.markdown(f"**{gun_adi} ({gun_tarih})**")
+                # gun formatı: "18.05.2026 Pazartesi"
+                tarih_kismi = gun.split(" ")[0]
+                gun_adi = gun.split(" ")[1].upper()
+                
+                # Sütun başlığında hem gün adı hem de net gg.aa.yyyy tarihi görünüyor
+                st.markdown(f"**{gun_adi}**\n`{tarih_kismi}`")
                 
                 for slot in slotlar:
                     slot_id = f"{gun}_{slot}"
@@ -150,7 +159,7 @@ else:
                     if st.checkbox(saat_gosterim, key=f"chk_{slot_id}"):
                         secilen_slotlar.append(slot_id)
                         
-        st.write("") # Güvenli Boşluk
+        st.write("") 
         submit = st.form_submit_button("Submit your vote", type="primary", use_container_width=True)
         
     if submit:
@@ -175,7 +184,7 @@ else:
                 st.rerun()
                     
     # SONUÇLAR (SKOR TABLOSU)
-    st.write("") # Güvenli Boşluk
+    st.write("") 
     st.markdown("### 📊 Final Results (Most suitable slots on top)")
     
     if oylar_havuzu:
