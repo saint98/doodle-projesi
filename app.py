@@ -5,11 +5,8 @@ import requests
 import json
 import urllib.parse
 
-# Sayfa Yapısı ve Genişlik Ayarları (Doodle Tasarımı İçin Ortalanmış)
-st.set_page_config(page_title="Create a poll - Doodle", layout="centered", initial_sidebar_state="collapsed")
-
-# Doodle Tasarımı İçin CSS Temizliği (Hatasız Tek Satır Formatında)
-st.markdown("<style>.main { background-color: #f8f9fa; } .doodle-card { background-color: white; padding: 30px; border-radius: 8px; border: 1px solid #e3e6e8; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); } .doodle-section-title { font-size: 22px; font-weight: 600; color: #1a1a1a; margin-bottom: 15px; } div.stButton > button:first-child { background-color: #0066cc; color: white; border-radius: 4px; font-weight: bold; border: none; padding: 0.6rem 2rem; } div.stButton > button:first-child:hover { background-color: #0052a3; }</style>", unsafe_allowed_html=True)
+# Sayfa Yapısı ve Başlık Ayarı
+st.set_page_config(page_title="Create a poll - Doodle", layout="centered")
 
 # Google Apps Script Bağlantısı
 @st.cache_data(ttl=1)
@@ -54,6 +51,7 @@ def slot_uret(baslangic_tarih_obj):
                "15:00 - 15:30", "15:30 - 16:00", "16:00 - 16:30", "16:30 - 17:00"]
     return gunler_tarihli, slotlar
 
+# URL Parametre Kontrolü
 parametreler = st.query_params
 secilen_anket = parametreler.get("anket_id", None)
 
@@ -61,35 +59,34 @@ if secilen_anket is None:
     # -------------------------------------------------------------------------
     # 🧡 EKRAN 1: ANKET OLUŞTURMA SAYFASI (CREATE GROUP POLL)
     # -------------------------------------------------------------------------
-    st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/s/s7/Doodle_Logo.svg/512px-Doodle_Logo.svg.png", width=120)
-    st.markdown("<br>", unsafe_allowed_html=True)
-
+    st.title("🧡 doodle")
+    st.subheader("Create group poll")
+    
     # BLOK 1: Detaylar
-    st.markdown('<div class="doodle-card">', unsafe_allowed_html=True)
-    st.markdown('<div class="doodle-section-title">Create group poll</div>', unsafe_allowed_html=True)
-    org_adi = st.text_input("Title", placeholder="What's the occasion?")
-    aciklama = st.text_area("Description (optional)", placeholder="Here you can include things like an agenda, instructions, or other details.")
-    lokasyon = st.text_input("Location (optional)", placeholder="Where will this happen?")
-    video_konferans = st.selectbox("Video conferencing", ["Off", "Google Meet", "Zoom", "Microsoft Teams"])
-    st.markdown('</div>', unsafe_allowed_html=True)
+    with st.container(border=True):
+        st.markdown("### 📝 Poll Details")
+        org_adi = st.text_input("Title", placeholder="What's the occasion? (e.g. Doçentlik Jürisi)")
+        aciklama = st.text_area("Description (optional)", placeholder="Here you can include things like an agenda or instructions.")
+        lokasyon = st.text_input("Location (optional)", placeholder="Where will this happen?")
+        video_konferans = st.selectbox("Video conferencing", ["Off", "Google Meet", "Zoom", "Microsoft Teams"])
 
     # BLOK 2: Zaman Seçimi
-    st.markdown('<div class="doodle-card">', unsafe_allowed_html=True)
-    st.markdown('<div class="doodle-section-title">Add your times</div>', unsafe_allowed_html=True)
-    st.write("⏱️ Duration: **30 min** (Akademik Standart)")
-    planlanacak_hafta = st.date_input("Select Week (Planlanacak Haftadan Bir Gün Seçin)", datetime.now())
-    st.markdown('</div>', unsafe_allowed_html=True)
+    with st.container(border=True):
+        st.markdown("### 📅 Add your times")
+        st.info("⏱️ Duration: Fixed 30 min (Akademik Standart)")
+        planlanacak_hafta = st.date_input("Select Week (Planlanacak haftadan herhangi bir gün seçin)", datetime.now())
 
     # BLOK 3: Özelleştirmeler
-    st.markdown('<div class="doodle-card">', unsafe_allowed_html=True)
-    st.markdown('<div class="doodle-section-title">Customize your poll ✨</div>', unsafe_allowed_html=True)
-    st.checkbox("Add your logo and brand colors", disabled=True, help="Pro Özelliği")
-    st.checkbox("Remove Ads (Reklamları Kaldır)", value=True, disabled=True)
-    st.checkbox("Send automatic reminders (Otomatik hatırlatıcılar aktif)", value=True, disabled=True)
-    st.markdown('</div>', unsafe_allowed_html=True)
+    with st.container(border=True):
+        st.markdown("### ⚙️ Customize your poll")
+        st.checkbox("Add your logo and brand colors", value=False, disabled=True, help="Pro feature")
+        st.checkbox("Remove Ads (Reklamlar Kaldırıldı)", value=True, disabled=True)
+        st.checkbox("Send automatic reminders", value=True, disabled=True)
 
-    # Buton
-    if st.button("Create poll and generate link"):
+    st.markdown("<br>", unsafe_allowed_html=True)
+    
+    # Oluşturma Butonu
+    if st.button("Create poll and generate link", type="primary", use_container_width=True):
         if org_adi:
             temiz_id = urllib.parse.quote(org_adi.strip())
             tarih_str = planlanacak_hafta.strftime("%d.%m.%Y")
@@ -99,7 +96,7 @@ if secilen_anket is None:
             ozel_doodle_linki = f"{ana_url}/?anket_id={anket_kod}"
             
             st.success("🎉 Poll created successfully!")
-            st.markdown("### 🔗 Share this link with your participants:")
+            st.markdown("#### 🔗 Share this link with your participants:")
             st.code(ozel_doodle_linki, language="text")
         else:
             st.error("Please enter a Title for your poll!")
@@ -117,7 +114,8 @@ else:
         
     temiz_baslik = gorunur_ad.replace(f"_{tarih_obj.strftime('%d.%m.%Y')}", "")
     
-    st.markdown(f'<div class="doodle-card" style="border-left: 5px solid #0066cc;"><h2>📅 {temiz_baslik}</h2><p style="color:#65696b;">Haftalık Seçim Matrisi / Başlangıç: {tarih_obj.strftime("%d.%m.%Y")}</p></div>', unsafe_allowed_html=True)
+    st.title(f"📅 {temiz_baslik}")
+    st.caption(f"Haftalık Seçim Matrisi | Başlangıç: {tarih_obj.strftime('%d.%m.%Y')}")
     
     org_data = raw_data[raw_data["Organizasyon_ID"] == secilen_anket] if not raw_data.empty else pd.DataFrame()
     
@@ -132,12 +130,10 @@ else:
                     
     gunler, slotlar = slot_uret(tarih_obj)
     
-    st.markdown('<div class="doodle-card">', unsafe_allowed_html=True)
-    st.markdown('<div class="doodle-section-title">✍️ Choose your availability</div>', unsafe_allowed_html=True)
-    
-    with st.form("hoca_formu"):
-        hoca_adi = st.text_input("Your name", placeholder="e.g. Prof. Dr. Ahmet Yılmaz")
-        st.markdown("<hr>", unsafe_allowed_html=True)
+    with st.form("hoca_formu", clear_on_submit=True):
+        st.markdown("### ✍️ Choose your availability")
+        hoca_adi = st.text_input("Your Name / Soyadınız", placeholder="e.g. Prof. Dr. Ahmet Yılmaz")
+        st.markdown("---")
         
         secilen_slotlar = []
         cols = st.columns(len(gunler))
@@ -146,15 +142,16 @@ else:
             with cols[i]:
                 gun_tarih = gun.split(" ")[0].split(".")[0]
                 gun_adi = gun.split(" ")[1][:3].upper()
-                st.markdown(f"<div style='text-align:center; background:#f1f3f5; padding:5px; font-weight:bold; border-radius:4px; margin-bottom:10px;'>{gun_adi}\n{gun_tarih}</div>", unsafe_allowed_html=True)
+                st.markdown(f"**{gun_adi} ({gun_tarih})**")
                 
                 for slot in slotlar:
                     slot_id = f"{gun}_{slot}"
-                    if st.checkbox(slot.split(" - ")[0], key=f"chk_{slot_id}", help=slot):
+                    saat_gosterim = slot.split(" - ")[0]
+                    if st.checkbox(saat_gosterim, key=f"chk_{slot_id}"):
                         secilen_slotlar.append(slot_id)
                         
         st.markdown("<br>", unsafe_allowed_html=True)
-        submit = st.form_submit_button("Submit your vote")
+        submit = st.form_submit_button("Submit your vote", type="primary", use_container_width=True)
         
     if submit:
         if not hoca_adi:
@@ -176,15 +173,14 @@ else:
                 st.success("Vote submitted successfully!")
                 st.cache_data.clear()
                 st.rerun()
-    st.markdown('</div>', unsafe_allowed_html=True)
                     
-    # SONUÇLAR
-    st.markdown('<div class="doodle-card">', unsafe_allowed_html=True)
-    st.markdown('<div class="doodle-section-title">📊 Final Results (Most suitable slots on top)</div>', unsafe_allowed_html=True)
+    # SONUÇLAR (SKOR TABLOSU)
+    st.markdown("<br>", unsafe_allowed_html=True)
+    st.markdown("### 📊 Final Results (Most suitable slots on top)")
     
     if oylar_havuzu:
         hocalar = list(oylar_havuzu.keys())
-        st.write(f"**Votes registered ({len(hocalar)}):** " + ", ".join(hocalar))
+        st.write(f"**Oylamaya Katılan Hocalar ({len(hocalar)}):** " + ", ".join(hocalar))
         
         skorlar = {}
         for hoca, oylanan_slotlar in oylar_havuzu.items():
@@ -207,4 +203,11 @@ else:
                 })
                 
         df_sonuc = pd.DataFrame(sonuc_verisi)
-        df_sonuc = df_sonuc.sort_values
+        df_sonuc = df_sonuc.sort_values(by="Votes", ascending=False)
+        st.dataframe(df_sonuc, use_container_width=True, hide_index=True)
+    else:
+        st.info("No votes yet. Be the first to vote!")
+        
+    if st.button("⬅️ Create a new poll"):
+        st.query_params.clear()
+        st.rerun()
