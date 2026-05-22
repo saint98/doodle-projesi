@@ -83,7 +83,7 @@ if secilen_anket is None:
         st.checkbox("Remove Ads (Reklamlar Kaldırıldı)", value=True, disabled=True)
         st.checkbox("Send automatic reminders", value=True, disabled=True)
 
-    st.html("<br>")
+    st.write("") # Güvenli Boşluk
     
     # Oluşturma Butonu
     if st.button("Create poll and generate link", type="primary", use_container_width=True):
@@ -150,7 +150,7 @@ else:
                     if st.checkbox(saat_gosterim, key=f"chk_{slot_id}"):
                         secilen_slotlar.append(slot_id)
                         
-        st.html("<br>")
+        st.write("") # Güvenli Boşluk
         submit = st.form_submit_button("Submit your vote", type="primary", use_container_width=True)
         
     if submit:
@@ -175,7 +175,7 @@ else:
                 st.rerun()
                     
     # SONUÇLAR (SKOR TABLOSU)
-    st.html("<br>")
+    st.write("") # Güvenli Boşluk
     st.markdown("### 📊 Final Results (Most suitable slots on top)")
     
     if oylar_havuzu:
